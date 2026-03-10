@@ -1657,6 +1657,8 @@ function filterTx(f) {
   });
   renderHistory();
 }
+
+function renderReport() {
   document.getElementById('report-month-label').textContent =
     `Tháng ${reportMonth.getMonth()+1}/${reportMonth.getFullYear()}`;
   const { income, expense, txs } = getMonthStats(reportMonth);
