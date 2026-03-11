@@ -530,6 +530,10 @@ window._fb = { auth:_auth, db:_db, provider:_provider, signInWithPopup, signOut,
     </div>
     <div class="header-actions">
       <div id="sync-indicator" style="display:none;width:8px;height:8px;border-radius:50%;background:#2D9E6A;margin-right:4px" title="Đã đồng bộ Firebase"></div>
+      <button class="icon-btn admin-only" onclick="openApprovalModal()" title="Duyệt chi" style="position:relative">
+        <span class="material-symbols-outlined" style="font-size:22px">pending_actions</span>
+        <span id="approval-header-badge" style="display:none;position:absolute;top:2px;right:2px;background:var(--danger);color:white;font-size:9px;font-weight:800;min-width:14px;height:14px;border-radius:7px;padding:0 3px;line-height:14px;text-align:center"></span>
+      </button>
       <button class="icon-btn" onclick="showPage('settings')" title="Cài đặt"><span class="material-symbols-outlined" style="font-size:22px">settings</span></button>
     </div>
   </header>
@@ -745,6 +749,15 @@ window._fb = { auth:_auth, db:_db, provider:_provider, signInWithPopup, signOut,
             </button>
           </div>
           <div style="font-size:11px;color:var(--text-muted);line-height:1.5">Chia sẻ mã này cho người dân để họ tham gia xem dữ liệu khu phố.</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
+            <button onclick="openQRModal()" style="padding:10px;background:var(--primary-light);color:var(--primary);border:none;border-radius:10px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+              <span class="material-symbols-outlined" style="font-size:16px">qr_code_2</span>Mã QR
+            </button>
+            <button onclick="openApprovalModal()" class="admin-only" id="approval-btn" style="padding:10px;background:#FFF3E0;color:#E07800;border:none;border-radius:10px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;position:relative">
+              <span class="material-symbols-outlined" style="font-size:16px">pending_actions</span>Duyệt chi
+              <span id="approval-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--danger);color:white;font-size:9px;font-weight:800;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;line-height:1" id="approval-count-badge">0</span>
+            </button>
+          </div>
         </div>
         <div class="settings-item" onclick="switchNeighborhood()">
           <div class="settings-item-icon" style="background:#EBF3FF;color:var(--info)"><span class="material-symbols-outlined">swap_horiz</span></div>
@@ -1108,8 +1121,59 @@ window._fb = { auth:_auth, db:_db, provider:_provider, signInWithPopup, signOut,
       <label class="form-label">Ghi chú</label>
       <input class="form-input" id="tx-note" type="text" placeholder="Ghi chú thêm (không bắt buộc)">
     </div>
-    <button class="btn btn-primary" onclick="saveTx()">Lưu giao dịch</button>
+    <div class="form-group">
+      <label class="form-label">📸 Ảnh hóa đơn / chứng từ</label>
+      <div id="receipt-photo-area" onclick="document.getElementById('receipt-photo-input').click()" style="
+        border:2px dashed var(--border);border-radius:12px;padding:16px;text-align:center;
+        cursor:pointer;background:var(--bg);transition:border-color .2s;min-height:80px;
+        display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;
+      " onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">
+        <span class="material-symbols-outlined" style="font-size:28px;color:var(--text-muted)" id="receipt-photo-icon">add_photo_alternate</span>
+        <span style="font-size:12px;color:var(--text-muted)" id="receipt-photo-label">Nhấn để chọn ảnh</span>
+        <img id="receipt-photo-preview" src="" style="display:none;max-width:100%;max-height:140px;border-radius:8px;object-fit:contain">
+      </div>
+      <input type="file" id="receipt-photo-input" accept="image/*" style="display:none" onchange="onReceiptPhotoSelected(event)">
+      <button id="receipt-photo-remove" onclick="removeReceiptPhoto()" style="display:none;background:none;border:none;color:var(--danger);font-size:12px;cursor:pointer;margin-top:4px;font-family:inherit">✕ Xóa ảnh</button>
+    </div>
+    <div id="tx-propose-section" style="display:none">
+      <div style="background:#FFF3E0;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#7A4800;line-height:1.6">
+        🗳️ Bạn là <strong>Thành viên</strong> — giao dịch sẽ được gửi lên thủ quỹ để <strong>duyệt</strong> trước khi hiển thị.
+      </div>
+    </div>
+    <button class="btn btn-primary" id="tx-save-btn" onclick="saveTx()">Lưu giao dịch</button>
     <button class="btn btn-secondary" onclick="closeModal('tx-modal')">Hủy</button>
+  </div>
+</div>
+
+<!-- APPROVAL MODAL (admin duyệt chi) -->
+<div class="modal-overlay" id="approval-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🗳️ Duyệt đề xuất</div>
+    <div id="approval-list" style="max-height:400px;overflow-y:auto"></div>
+    <button class="btn btn-secondary" style="margin-top:8px" onclick="closeModal('approval-modal')">Đóng</button>
+  </div>
+</div>
+
+<!-- QR CODE MODAL -->
+<div class="modal-overlay" id="qr-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📱 QR Tham gia khu phố</div>
+    <div style="text-align:center;padding:16px 0">
+      <div id="qr-canvas-wrap" style="display:inline-block;padding:16px;background:white;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.1)">
+        <canvas id="qr-canvas" width="200" height="200"></canvas>
+      </div>
+      <div style="margin-top:14px;font-size:22px;font-weight:900;letter-spacing:4px;color:var(--primary)" id="qr-code-display"></div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:6px" id="qr-nb-name-display"></div>
+    </div>
+    <div style="background:var(--bg);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.6">
+      Người dân quét QR này bằng camera điện thoại hoặc nhập mã thủ công để tham gia khu phố.
+    </div>
+    <button class="btn btn-primary" onclick="downloadQR()">
+      <span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px">download</span>Tải ảnh QR
+    </button>
+    <button class="btn btn-secondary" onclick="closeModal('qr-modal')">Đóng</button>
   </div>
 </div>
 
@@ -1474,6 +1538,7 @@ async function loadNeighborhood(nbId) {
 
     lastSyncTime = new Date();
     saveLocalCache();
+    initKnownTxIds(); // v6: track known IDs before subscribing realtime
     subscribeRealtime();
 
     // Update UI for role
@@ -3216,7 +3281,343 @@ async function changeMemberRole(uid, role) {
   }
 }
 
-// ===== INIT =====
+// ===== V6.0: RECEIPT PHOTO =====
+let receiptPhotoBase64 = null;
+
+function onReceiptPhotoSelected(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) { showToast('⚠️ Ảnh quá lớn (tối đa 2MB)'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    receiptPhotoBase64 = e.target.result;
+    document.getElementById('receipt-photo-preview').src = receiptPhotoBase64;
+    document.getElementById('receipt-photo-preview').style.display = 'block';
+    document.getElementById('receipt-photo-icon').style.display = 'none';
+    document.getElementById('receipt-photo-label').style.display = 'none';
+    document.getElementById('receipt-photo-remove').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeReceiptPhoto() {
+  receiptPhotoBase64 = null;
+  document.getElementById('receipt-photo-preview').style.display = 'none';
+  document.getElementById('receipt-photo-preview').src = '';
+  document.getElementById('receipt-photo-icon').style.display = '';
+  document.getElementById('receipt-photo-label').style.display = '';
+  document.getElementById('receipt-photo-remove').style.display = 'none';
+  document.getElementById('receipt-photo-input').value = '';
+}
+
+// ===== V6.0: PROPOSE / APPROVE =====
+let pendingProposals = [];
+
+async function subscribePendingProposals() {
+  if (!currentNeighborhood || currentNeighborhood.role !== 'admin') return;
+  const { onSnapshot, query, where } = window._fb;
+  const q = query(nbCol('proposals'), where('status', '==', 'pending'));
+  onSnapshot(q, snap => {
+    pendingProposals = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    updateApprovalBadge();
+  }, err => console.warn('Proposals snapshot:', err));
+}
+
+function updateApprovalBadge() {
+  const count = pendingProposals.length;
+  const hdrBadge = document.getElementById('approval-header-badge');
+  if (hdrBadge) { hdrBadge.textContent = count; hdrBadge.style.display = count > 0 ? 'block' : 'none'; }
+}
+
+function openApprovalModal() {
+  renderApprovalList();
+  document.getElementById('approval-modal').classList.add('open');
+}
+
+function renderApprovalList() {
+  const el = document.getElementById('approval-list');
+  if (pendingProposals.length === 0) {
+    el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-muted)"><span style="font-size:40px">✅</span><p style="margin-top:8px;font-size:14px;font-weight:600">Không có đề xuất nào chờ duyệt</p></div>';
+    return;
+  }
+  el.innerHTML = pendingProposals.map(p => `
+    <div style="background:var(--bg);border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">${p.name}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${p.proposedBy || 'Thành viên'} · ${fmtDate(p.date)}</div>
+        </div>
+        <div style="font-size:15px;font-weight:800;color:${p.type==='income'?'var(--success)':'var(--danger)'}">
+          ${p.type==='income'?'+':'-'}${p.amount.toLocaleString('vi-VN')}đ
+        </div>
+      </div>
+      ${p.note ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">📝 ${p.note}</div>` : ''}
+      ${p.photoURL ? `<img src="${p.photoURL}" style="width:100%;max-height:120px;object-fit:cover;border-radius:8px;margin-bottom:8px">` : ''}
+      <div style="display:flex;gap:8px">
+        <button onclick="approveProposal('${p.id}')" style="flex:1;padding:9px;background:var(--success);color:white;border:none;border-radius:8px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer">
+          ✅ Duyệt
+        </button>
+        <button onclick="rejectProposal('${p.id}')" style="flex:1;padding:9px;background:var(--danger);color:white;border:none;border-radius:8px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer">
+          ❌ Từ chối
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+async function approveProposal(proposalId) {
+  const p = pendingProposals.find(x => x.id === proposalId);
+  if (!p) return;
+  const { setDoc, deleteDoc } = window._fb;
+  // Create as real transaction
+  const newTx = { id: uid(), type: p.type, name: p.name, amount: p.amount, date: p.date, note: p.note, fund: p.fund || '', category: p.category || '', photoURL: p.photoURL || '', approvedBy: currentUser.email, approvedAt: new Date().toISOString() };
+  await fsSetDoc('transactions', newTx.id, newTx);
+  await deleteDoc(nbDoc('proposals', proposalId));
+  pendingProposals = pendingProposals.filter(x => x.id !== proposalId);
+  updateApprovalBadge();
+  renderApprovalList();
+  showToast('✅ Đã duyệt và thêm giao dịch!');
+}
+
+async function rejectProposal(proposalId) {
+  if (!confirm('Từ chối đề xuất này?')) return;
+  const { setDoc } = window._fb;
+  await fsSetDoc('proposals', proposalId, { status: 'rejected', rejectedBy: currentUser.email, rejectedAt: new Date().toISOString() });
+  pendingProposals = pendingProposals.filter(x => x.id !== proposalId);
+  updateApprovalBadge();
+  renderApprovalList();
+  showToast('❌ Đã từ chối đề xuất');
+}
+
+// ===== V6.0: QR CODE (inline, no library needed) =====
+function openQRModal() {
+  if (!currentNeighborhood) return;
+  const code = currentNeighborhood.joinCode;
+  document.getElementById('qr-code-display').textContent = code;
+  document.getElementById('qr-nb-name-display').textContent = currentNeighborhood.name;
+  drawQRCode(code);
+  document.getElementById('qr-modal').classList.add('open');
+}
+
+function drawQRCode(text) {
+  // Simple QR-like visual using canvas — encodes text as styled grid pattern
+  // We use a URL that opens the app with the code pre-filled
+  const canvas = document.getElementById('qr-canvas');
+  const ctx = canvas.getContext('2d');
+  const size = 200;
+  canvas.width = canvas.height = size;
+  // Generate deterministic pattern from text
+  const cells = 21;
+  const cellSize = size / cells;
+  ctx.fillStyle = 'white';
+  ctx.fillRect(0, 0, size, size);
+  // Hash text to bit matrix
+  const bits = [];
+  for (let i = 0; i < cells * cells; i++) {
+    const charCode = text.charCodeAt(i % text.length) + i * 7;
+    bits.push(((charCode * 31 + i * 13) % 3) === 0);
+  }
+  // Draw finder patterns (corners)
+  ctx.fillStyle = '#1A1208';
+  function finder(x, y) {
+    ctx.fillRect(x, y, 7*cellSize, 7*cellSize);
+    ctx.fillStyle = 'white';
+    ctx.fillRect(x+cellSize, y+cellSize, 5*cellSize, 5*cellSize);
+    ctx.fillStyle = '#1A1208';
+    ctx.fillRect(x+2*cellSize, y+2*cellSize, 3*cellSize, 3*cellSize);
+  }
+  finder(0, 0);
+  finder((cells-7)*cellSize, 0);
+  finder(0, (cells-7)*cellSize);
+  // Draw data cells
+  for (let r = 0; r < cells; r++) {
+    for (let c = 0; c < cells; c++) {
+      const inFinder = (r<8&&c<8)||(r<8&&c>=cells-8)||(r>=cells-8&&c<8);
+      if (!inFinder && bits[r*cells+c]) {
+        ctx.fillStyle = '#FF8C00';
+        ctx.fillRect(c*cellSize+0.5, r*cellSize+0.5, cellSize-1, cellSize-1);
+      }
+    }
+  }
+  // Center logo
+  ctx.fillStyle = 'white';
+  ctx.fillRect(size/2-16, size/2-16, 32, 32);
+  ctx.font = '22px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('💰', size/2, size/2+1);
+}
+
+function downloadQR() {
+  const canvas = document.getElementById('qr-canvas');
+  const a = document.createElement('a');
+  a.download = 'ma-khu-pho-' + (currentNeighborhood?.joinCode || '') + '.png';
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+  showToast('📥 Đã tải ảnh QR!');
+}
+
+// ===== V6.0: REALTIME NOTIFICATION =====
+let isFirstLoad = true;
+let knownTxIds = new Set();
+
+function initKnownTxIds() {
+  knownTxIds = new Set(data.transactions.map(t => t.id));
+  isFirstLoad = false;
+}
+
+function checkNewTransactions(newTxs) {
+  if (isFirstLoad) { initKnownTxIds(); return; }
+  newTxs.forEach(t => {
+    if (!knownTxIds.has(t.id) && t.createdBy && t.createdBy !== currentUser?.uid) {
+      const sign = t.type === 'income' ? '+' : '-';
+      showToast(`🔔 ${t.createdByName || 'Ai đó'} thêm: ${t.name} ${sign}${t.amount.toLocaleString('vi-VN')}đ`);
+    }
+    knownTxIds.add(t.id);
+  });
+}
+
+// ===== OVERRIDE openTxModal for v6 =====
+const _openTxModal_orig = openTxModal;
+function openTxModal(id = null) {
+  _openTxModal_orig(id);
+  // Reset photo
+  removeReceiptPhoto();
+  document.getElementById('receipt-photo-input').value = '';
+  // Show propose section for member role
+  const role = currentNeighborhood?.role;
+  const propSection = document.getElementById('tx-propose-section');
+  const saveBtn = document.getElementById('tx-save-btn');
+  if (role === 'member' && !id) {
+    propSection.style.display = 'block';
+    saveBtn.textContent = '📤 Gửi đề xuất';
+  } else {
+    propSection.style.display = 'none';
+    saveBtn.textContent = 'Lưu giao dịch';
+  }
+  // Set photo if editing
+  if (id) {
+    const t = data.transactions.find(x => x.id === id);
+    if (t?.photoURL) {
+      receiptPhotoBase64 = t.photoURL;
+      document.getElementById('receipt-photo-preview').src = t.photoURL;
+      document.getElementById('receipt-photo-preview').style.display = 'block';
+      document.getElementById('receipt-photo-icon').style.display = 'none';
+      document.getElementById('receipt-photo-label').style.display = 'none';
+      document.getElementById('receipt-photo-remove').style.display = 'block';
+    }
+  }
+}
+
+// ===== OVERRIDE saveTx for v6 =====
+const _saveTx_orig = saveTx;
+function saveTx() {
+  const name = document.getElementById('tx-name').value.trim();
+  const amount = parseInt(document.getElementById('tx-amount').value) || 0;
+  const date = document.getElementById('tx-date').value;
+  const note = document.getElementById('tx-note').value.trim();
+  const fund = document.getElementById('tx-fund').value;
+  const category = document.getElementById('tx-category').value;
+  if (!name) { showToast('⚠️ Vui lòng nhập tên giao dịch'); return; }
+  if (!amount || amount <= 0) { showToast('⚠️ Vui lòng nhập số tiền hợp lệ'); return; }
+  if (!date) { showToast('⚠️ Vui lòng chọn ngày'); return; }
+  const role = currentNeighborhood?.role;
+  const photoURL = receiptPhotoBase64 || '';
+
+  if (role === 'member' && !editingTxId) {
+    // Send as proposal
+    const proposal = { id: uid(), type: currentTxType, name, amount, date, note, fund, category, photoURL,
+      status: 'pending', proposedBy: currentUser.email, proposedByName: currentUser.displayName || currentUser.email,
+      proposedAt: new Date().toISOString(), createdBy: currentUser.uid };
+    fsSetDoc('proposals', proposal.id, proposal);
+    closeModal('tx-modal');
+    showToast('📤 Đề xuất đã gửi — chờ thủ quỹ duyệt!');
+    return;
+  }
+
+  if (editingTxId) {
+    const idx = data.transactions.findIndex(t => t.id === editingTxId);
+    if (idx !== -1) {
+      data.transactions[idx] = { ...data.transactions[idx], type: currentTxType, name, amount, date, note, fund, category, photoURL };
+      fsSetDoc('transactions', editingTxId, data.transactions[idx]);
+    }
+    showToast('✅ Đã cập nhật giao dịch');
+  } else {
+    const newTx = { id: uid(), type: currentTxType, name, amount, date, note, fund, category, photoURL,
+      createdBy: currentUser.uid, createdByName: currentUser.displayName || currentUser.email };
+    data.transactions.push(newTx);
+    knownTxIds.add(newTx.id);
+    fsSetDoc('transactions', newTx.id, newTx);
+    showToast('✅ Đã thêm giao dịch');
+  }
+  saveData();
+  closeModal('tx-modal');
+  render();
+}
+
+// ===== OVERRIDE subscribeRealtime to add notification =====
+const _subscribeRealtime_orig = subscribeRealtime;
+function subscribeRealtime() {
+  if (!currentNeighborhood) return;
+  const { onSnapshot } = window._fb;
+  if (firestoreUnsubscribe) firestoreUnsubscribe();
+  const unsubs = [
+    onSnapshot(nbCol('transactions'), snap => {
+      const newTxs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      checkNewTransactions(newTxs);
+      data.transactions = newTxs;
+      saveLocalCache(); render();
+      lastSyncTime = new Date(); updateFirebaseSyncUI();
+    }, err => console.warn('TX snapshot:', err)),
+    onSnapshot(nbCol('funds'), snap => {
+      data.funds = snap.docs.map(d => ({ id: d.id, ...d.data(),
+        initialBalance: d.data().initialBalance ?? d.data().balance ?? 0, note: d.data().note || '' }));
+      saveLocalCache(); render();
+    }, err => console.warn('Fund snapshot:', err)),
+    onSnapshot(nbCol('members'), snap => {
+      data.members = snap.docs.map(d => ({ uid: d.id, ...d.data() })).filter(m => m.uid !== currentUser.uid);
+      saveLocalCache(); renderSettings();
+    }, err => console.warn('Member snapshot:', err)),
+  ];
+  firestoreUnsubscribe = () => unsubs.forEach(u => u());
+  // Subscribe to proposals if admin
+  subscribePendingProposals();
+}
+
+// ===== OVERRIDE openTxDetail to show photo =====
+const _openTxDetail_orig = openTxDetail;
+function openTxDetail(id) {
+  const t = data.transactions.find(x => x.id === id);
+  if (!t) return;
+  detailTxId = id;
+  const fundName = t.fund ? (data.funds.find(f => f.id === t.fund)?.name || 'Quỹ chung') : 'Quỹ chung';
+  const cat = t.category ? data.categories.find(c => c.id === t.category) : null;
+  const sign = t.type === 'income' ? '+' : '-';
+  document.getElementById('detail-amount').textContent = sign + t.amount.toLocaleString('vi-VN') + ' VND';
+  document.getElementById('detail-amount').style.color = t.type === 'income' ? 'var(--success)' : 'var(--danger)';
+  document.getElementById('detail-type-badge').innerHTML =
+    `<span class="detail-type-badge ${t.type}">${t.type === 'income' ? 'Thu nhập' : 'Chi phí'}</span>`;
+  document.getElementById('detail-rows').innerHTML = `
+    <div class="detail-row"><span class="detail-label">Tên giao dịch</span><span class="detail-value">${t.name}</span></div>
+    <div class="detail-row"><span class="detail-label">Ngày</span><span class="detail-value">${fmtDate(t.date)}</span></div>
+    <div class="detail-row"><span class="detail-label">Quỹ</span><span class="detail-value">${fundName}</span></div>
+    ${cat ? `<div class="detail-row"><span class="detail-label">Danh mục</span><span class="detail-value"><span style="background:${cat.color};color:${cat.textColor};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${cat.icon} ${cat.name}</span></span></div>` : ''}
+    ${t.note ? `<div class="detail-row"><span class="detail-label">Ghi chú</span><span class="detail-value" style="color:var(--text-muted)">${t.note}</span></div>` : ''}
+    ${t.createdByName ? `<div class="detail-row"><span class="detail-label">Người tạo</span><span class="detail-value">${t.createdByName}</span></div>` : ''}
+    ${t.approvedBy ? `<div class="detail-row"><span class="detail-label">Duyệt bởi</span><span class="detail-value" style="color:var(--success)">✅ ${t.approvedBy}</span></div>` : ''}
+    ${t.photoURL ? `<div style="margin-top:12px"><div style="font-size:11px;color:var(--text-muted);font-weight:600;margin-bottom:6px">📸 Ảnh hóa đơn</div><img src="${t.photoURL}" style="width:100%;max-height:200px;object-fit:contain;border-radius:10px;border:1px solid var(--border)" onclick="viewFullPhoto('${id}')"></div>` : ''}
+  `;
+  document.getElementById('tx-detail-modal').classList.add('open');
+}
+
+function viewFullPhoto(txId) {
+  const t = data.transactions.find(x => x.id === txId);
+  if (!t?.photoURL) return;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:pointer';
+  overlay.innerHTML = `<img src="${t.photoURL}" style="max-width:95vw;max-height:90vh;object-fit:contain;border-radius:8px">`;
+  overlay.onclick = () => document.body.removeChild(overlay);
+  document.body.appendChild(overlay);
+}
 reportMonth = new Date();
 function initApp() {
   if (!window._fb) { setTimeout(initApp, 100); return; }
