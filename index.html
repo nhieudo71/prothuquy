@@ -406,7 +406,7 @@ window._fb = { auth:_auth, db:_db, provider:_provider, signInWithPopup, signOut,
 <div id="login-screen" style="
   position:fixed;inset:0;z-index:9999;
   background:linear-gradient(160deg,#1A1208 0%,#3A2000 60%,#FF8C00 150%);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  display:none;flex-direction:column;align-items:center;justify-content:center;
   font-family:'Be Vietnam Pro',sans-serif;
   padding:32px 24px;
 ">
@@ -489,15 +489,16 @@ window._fb = { auth:_auth, db:_db, provider:_provider, signInWithPopup, signOut,
   </div>
 </div>
 
-<!-- Loading overlay -->
+<!-- Loading overlay — shown immediately on startup -->
 <div id="app-loading" style="
   position:fixed;inset:0;z-index:500;
-  background:rgba(255,255,255,0.95);
+  background:linear-gradient(160deg,#1A1208 0%,#3A2000 60%,#FF8C00 150%);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:14px;font-family:'Be Vietnam Pro',sans-serif;
 ">
-  <div style="width:48px;height:48px;border:3px solid #EAE4DC;border-top-color:#FF8C00;border-radius:50%;animation:spin 1s linear infinite"></div>
-  <p id="loading-text" style="font-size:14px;font-weight:600;color:#7A6E62">Đang tải dữ liệu...</p>
+  <div style="width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,#FF8C00,#E65C00);display:flex;align-items:center;justify-content:center;font-size:36px;margin-bottom:4px;box-shadow:0 8px 24px rgba(255,140,0,.4)">💰</div>
+  <div style="width:40px;height:40px;border:3px solid rgba(255,255,255,.25);border-top-color:white;border-radius:50%;animation:spin 1s linear infinite"></div>
+  <p id="loading-text" style="font-size:13px;font-weight:600;color:rgba(255,255,255,.7)">Đang kiểm tra phiên đăng nhập...</p>
 </div>
 
 <style>
@@ -603,14 +604,35 @@ window._fb = { auth:_auth, db:_db, provider:_provider, signInWithPopup, signOut,
           <span class="material-symbols-outlined" style="font-size:16px">close</span>
         </button>
       </div>
-      <!-- Type Filter -->
+      <!-- Type Filter chips (only 3 items, keep as chips) -->
       <div class="filter-bar" id="filter-bar">
         <button class="filter-chip active" data-filter="all" onclick="filterTx('all')">Tất cả</button>
         <button class="filter-chip" data-filter="income" onclick="filterTx('income')">Thu nhập</button>
         <button class="filter-chip" data-filter="expense" onclick="filterTx('expense')">Chi phí</button>
       </div>
-      <!-- Category Filter -->
-      <div class="filter-bar" id="cat-filter-bar" style="margin-top:0"></div>
+      <!-- Category + Fund dropdowns -->
+      <div style="display:flex;gap:8px;padding:0 16px 10px;flex-wrap:wrap" id="dropdown-filter-row">
+        <div style="position:relative;flex:1;min-width:120px">
+          <select id="cat-filter-select" onchange="filterCat(this.value)" style="
+            width:100%;padding:8px 32px 8px 12px;border:1.5px solid var(--border);
+            border-radius:20px;background:var(--card);font-family:inherit;font-size:12px;
+            font-weight:600;color:var(--text);appearance:none;cursor:pointer;outline:none;
+          ">
+            <option value="">🏷 Tất cả danh mục</option>
+          </select>
+          <span class="material-symbols-outlined" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:16px;color:var(--text-muted);pointer-events:none">expand_more</span>
+        </div>
+        <div style="position:relative;flex:1;min-width:120px" id="fund-dropdown-wrap">
+          <select id="fund-filter-select" onchange="filterFund(this.value)" style="
+            width:100%;padding:8px 32px 8px 12px;border:1.5px solid var(--border);
+            border-radius:20px;background:var(--card);font-family:inherit;font-size:12px;
+            font-weight:600;color:var(--text);appearance:none;cursor:pointer;outline:none;
+          ">
+            <option value="">🗂 Tất cả quỹ</option>
+          </select>
+          <span class="material-symbols-outlined" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:16px;color:var(--text-muted);pointer-events:none">expand_more</span>
+        </div>
+      </div>
       <div style="padding: 0 16px;" id="all-txs-container">
         <div class="empty-state"><span class="material-symbols-outlined">receipt_long</span><p>Chưa có giao dịch nào</p></div>
       </div>
@@ -659,6 +681,12 @@ window._fb = { auth:_auth, db:_db, provider:_provider, signInWithPopup, signOut,
           </div>
         </div>
         <div id="report-txs"></div>
+      </section>
+      <section>
+        <div class="section-header">
+          <h3 class="section-title">Báo cáo theo quỹ</h3>
+        </div>
+        <div id="report-fund-breakdown" style="padding:0 16px 16px"></div>
       </section>
     </div>
 
@@ -1312,6 +1340,22 @@ window._fb = { auth:_auth, db:_db, provider:_provider, signInWithPopup, signOut,
 <!-- RECEIPT PRINT AREA (hidden, shown on print) -->
 <div id="receipt-print-area"></div>
 
+<!-- FUND DETAIL MODAL -->
+<div class="modal-overlay" id="fund-detail-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div class="modal-title" style="margin-bottom:0" id="fund-detail-title">Chi tiết quỹ</div>
+      <div id="fund-detail-balance-badge" style="font-size:15px;font-weight:800;color:var(--primary)"></div>
+    </div>
+    <div id="fund-detail-stats" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:12px 0 16px">
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Giao dịch của quỹ này</div>
+    <div id="fund-detail-txs" style="max-height:320px;overflow-y:auto"></div>
+    <button class="btn btn-secondary" style="margin-top:12px" onclick="closeModal('fund-detail-modal')">Đóng</button>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div id="toast"></div>
 
@@ -1388,6 +1432,7 @@ async function onUserSignedIn(user) {
   if (lastNbId) {
     document.getElementById('app-loading').style.display = 'flex';
     document.getElementById('loading-text').textContent = 'Đang tải khu phố...';
+    document.getElementById('loading-text').style.color = 'rgba(255,255,255,.7)';
     const ok = await loadNeighborhood(lastNbId);
     if (ok) return;
     document.getElementById('app-loading').style.display = 'none';
@@ -1769,13 +1814,16 @@ function renderDashboard() {
     fundList.innerHTML = fundBalances.map(f => {
       const pct = Math.max(0, Math.round(f.currentBalance / totalFunds * 100));
       const balColor = f.currentBalance < 0 ? 'color:var(--danger)' : '';
-      return `<div class="fund-card">
+      return `<div class="fund-card" onclick="openFundDetail('${f.id}')" style="cursor:pointer;transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow=''">
         <div class="fund-header">
           <div>
             <span class="fund-name">${f.name}</span>
             ${f.note ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px">${f.note}</div>` : ''}
           </div>
-          <span class="fund-amount" style="${balColor}">${fmtMoneyFull(f.currentBalance)} (${pct}%)</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="fund-amount" style="${balColor}">${fmtMoneyFull(f.currentBalance)} (${pct}%)</span>
+            <span class="material-symbols-outlined" style="font-size:16px;color:var(--text-muted)">chevron_right</span>
+          </div>
         </div>
         <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
       </div>`;
@@ -1817,10 +1865,11 @@ function txHTML(t, showActions=true) {
   </div>`;
 }
 
+let fundFilterActive = '';
+
 function renderHistory() {
   let txs = [...data.transactions].sort((a,b)=>new Date(b.date)-new Date(a.date));
   if (filterActive !== 'all') txs = txs.filter(t=>t.type===filterActive);
-  // Search filter
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
     txs = txs.filter(t => {
@@ -1832,25 +1881,40 @@ function renderHistory() {
         fmtMoneyFull(t.amount).includes(q);
     });
   }
-  // Category filter
   if (catFilterActive) txs = txs.filter(t=>t.category===catFilterActive);
+  if (fundFilterActive) txs = txs.filter(t=>(t.fund||'')=== fundFilterActive);
 
-  // Render category filter chips
-  const catBar = document.getElementById('cat-filter-bar');
-  if (data.categories.length > 0) {
-    catBar.innerHTML = data.categories.map(c =>
-      `<button class="filter-chip${catFilterActive===c.id?' active':''}" onclick="filterCat('${c.id}')">${c.icon} ${c.name}</button>`
-    ).join('');
-    if (catFilterActive) catBar.innerHTML = `<button class="filter-chip active" onclick="filterCat('')">✕ Tất cả</button>` + catBar.innerHTML;
-    catBar.style.display = 'flex';
-  } else { catBar.style.display = 'none'; }
+  // Populate category dropdown
+  const catSel = document.getElementById('cat-filter-select');
+  if (catSel) {
+    const prev = catSel.value;
+    catSel.innerHTML = '<option value="">🏷 Tất cả danh mục</option>' +
+      data.categories.map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join('');
+    catSel.value = catFilterActive || '';
+    catSel.style.borderColor = catFilterActive ? 'var(--primary)' : 'var(--border)';
+    catSel.style.color = catFilterActive ? 'var(--primary)' : 'var(--text)';
+    // show/hide dropdown row
+    const row = document.getElementById('dropdown-filter-row');
+    if (row) row.style.display = (data.categories.length > 0 || data.funds.length > 0) ? 'flex' : 'none';
+  }
+
+  // Populate fund dropdown
+  const fundSel = document.getElementById('fund-filter-select');
+  if (fundSel) {
+    fundSel.innerHTML = '<option value="">🗂 Tất cả quỹ</option>' +
+      data.funds.map(f => `<option value="${f.id}">🗂 ${f.name}</option>`).join('');
+    fundSel.value = fundFilterActive || '';
+    fundSel.style.borderColor = fundFilterActive ? 'var(--primary)' : 'var(--border)';
+    fundSel.style.color = fundFilterActive ? 'var(--primary)' : 'var(--text)';
+    const wrap = document.getElementById('fund-dropdown-wrap');
+    if (wrap) wrap.style.display = data.funds.length > 0 ? '' : 'none';
+  }
 
   const container = document.getElementById('all-txs-container');
   if (txs.length === 0) {
-    container.innerHTML = `<div class="empty-state"><span class="material-symbols-outlined">receipt_long</span><p>${searchQuery||catFilterActive ? 'Không tìm thấy kết quả' : 'Không có giao dịch'}</p></div>`;
+    container.innerHTML = `<div class="empty-state"><span class="material-symbols-outlined">receipt_long</span><p>${searchQuery||catFilterActive||fundFilterActive ? 'Không tìm thấy kết quả' : 'Không có giao dịch'}</p></div>`;
     return;
   }
-  // Group by month
   const groups = {};
   txs.forEach(t => {
     const d = new Date(t.date);
@@ -1884,6 +1948,62 @@ function clearSearch() {
 function filterCat(catId) {
   catFilterActive = catId;
   renderHistory();
+}
+
+function filterFund(fundId) {
+  fundFilterActive = fundId;
+  renderHistory();
+}
+
+function openFundDetail(fundId) {
+  const fund = data.funds.find(f => f.id === fundId);
+  if (!fund) return;
+  const txs = [...data.transactions]
+    .filter(t => t.fund === fundId)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  const income = txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount, 0);
+  const expense = txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount, 0);
+  const balance = getFundBalance(fundId);
+
+  document.getElementById('fund-detail-title').textContent = '🗂 ' + fund.name;
+  document.getElementById('fund-detail-balance-badge').textContent = fmtMoneyFull(balance);
+  document.getElementById('fund-detail-balance-badge').style.color = balance < 0 ? 'var(--danger)' : 'var(--primary)';
+
+  document.getElementById('fund-detail-stats').innerHTML = `
+    <div style="background:#E8F7F0;border-radius:10px;padding:10px;text-align:center">
+      <div style="font-size:10px;color:var(--text-muted);font-weight:700;margin-bottom:2px">TỔNG THU</div>
+      <div style="font-size:13px;font-weight:800;color:var(--success)">+${fmtMoneyFull(income)}</div>
+    </div>
+    <div style="background:#FEF0F0;border-radius:10px;padding:10px;text-align:center">
+      <div style="font-size:10px;color:var(--text-muted);font-weight:700;margin-bottom:2px">TỔNG CHI</div>
+      <div style="font-size:13px;font-weight:800;color:var(--danger)">-${fmtMoneyFull(expense)}</div>
+    </div>
+    <div style="background:#FFF3E0;border-radius:10px;padding:10px;text-align:center">
+      <div style="font-size:10px;color:var(--text-muted);font-weight:700;margin-bottom:2px">GIAO DỊCH</div>
+      <div style="font-size:13px;font-weight:800;color:var(--primary)">${txs.length}</div>
+    </div>`;
+
+  const txsEl = document.getElementById('fund-detail-txs');
+  if (txs.length === 0) {
+    txsEl.innerHTML = `<div class="empty-state"><span class="material-symbols-outlined">receipt_long</span><p>Chưa có giao dịch nào</p></div>`;
+  } else {
+    // Group by month
+    const groups = {};
+    txs.forEach(t => {
+      const d = new Date(t.date);
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const label = `Tháng ${d.getMonth()+1}, ${d.getFullYear()}`;
+      if (!groups[key]) groups[key] = { label, txs: [] };
+      groups[key].txs.push(t);
+    });
+    txsEl.innerHTML = Object.entries(groups).map(([k, g]) =>
+      `<div style="margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);padding:4px 0 2px">${g.label}</div>
+        ${g.txs.map(t => txHTML(t, false)).join('')}
+      </div>`
+    ).join('');
+  }
+  document.getElementById('fund-detail-modal').classList.add('open');
 }
 
 function filterTx(f) {
@@ -1932,6 +2052,50 @@ function renderReport() {
     rtxs.innerHTML = `<div style="padding:0 16px"><div class="empty-state"><span class="material-symbols-outlined">receipt_long</span><p>Không có giao dịch</p></div></div>`;
   } else {
     rtxs.innerHTML = `<div style="padding:0 16px">${txs.map(t=>txHTML(t,false)).join('')}</div>`;
+  }
+
+  // Fund breakdown for this month
+  const breakdown = document.getElementById('report-fund-breakdown');
+  if (data.funds.length === 0) {
+    breakdown.innerHTML = `<div class="empty-state"><span class="material-symbols-outlined">folder_open</span><p>Chưa có quỹ nào</p></div>`;
+  } else {
+    const m = reportMonth.getMonth(), y = reportMonth.getFullYear();
+    const monthTxs = data.transactions.filter(t => {
+      const d = new Date(t.date);
+      return d.getMonth() === m && d.getFullYear() === y;
+    });
+    const fundItems = data.funds.map(f => {
+      const fTxs = monthTxs.filter(t => t.fund === f.id);
+      const fIncome = fTxs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+      const fExpense = fTxs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+      const fBalance = getFundBalance(f.id);
+      return { f, fTxs, fIncome, fExpense, fBalance };
+    });
+    breakdown.innerHTML = fundItems.map(({ f, fTxs, fIncome, fExpense, fBalance }) => `
+      <div onclick="openFundDetail('${f.id}')" style="background:white;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:10px;cursor:pointer;transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.08)'" onmouseout="this.style.boxShadow=''">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-size:14px;font-weight:700">🗂 ${f.name}</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:13px;font-weight:800;color:${fBalance<0?'var(--danger)':'var(--primary)'}">Số dư: ${fmtMoneyFull(fBalance)}</span>
+            <span class="material-symbols-outlined" style="font-size:16px;color:var(--text-muted)">chevron_right</span>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+          <div style="background:#E8F7F0;border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:10px;color:var(--text-muted);font-weight:600">THU</div>
+            <div style="font-size:13px;font-weight:800;color:var(--success)">+${fmtMoneyFull(fIncome)}</div>
+          </div>
+          <div style="background:#FEF0F0;border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:10px;color:var(--text-muted);font-weight:600">CHI</div>
+            <div style="font-size:13px;font-weight:800;color:var(--danger)">-${fmtMoneyFull(fExpense)}</div>
+          </div>
+          <div style="background:#FFF3E0;border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:10px;color:var(--text-muted);font-weight:600">GD</div>
+            <div style="font-size:13px;font-weight:800;color:var(--primary)">${fTxs.length}</div>
+          </div>
+        </div>
+        ${fTxs.length === 0 ? `<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:4px">Không có giao dịch tháng này</div>` : ''}
+      </div>`).join('');
   }
 }
 
@@ -3527,9 +3691,9 @@ function initApp() {
     if (user) {
       onUserSignedIn(user);
     } else {
-      document.getElementById('login-screen').style.display = 'flex';
-      document.getElementById('nb-picker-screen').style.display = 'none';
       document.getElementById('app-loading').style.display = 'none';
+      document.getElementById('nb-picker-screen').style.display = 'none';
+      document.getElementById('login-screen').style.display = 'flex';
     }
   });
 }
